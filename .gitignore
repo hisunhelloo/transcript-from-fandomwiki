@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+venv/
+
+# Output files (generated locally)
+output/
+
+# Raw debug files
+_raw_api.html
+
+# OS
+.DS_Store
+Thumbs.db

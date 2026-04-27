@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Fandom Transcript Crawler</title>
+  <meta name="description" content="Paste any Fandom wiki transcript URL and download it as Markdown, PDF, or Word document instantly."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0e14;
+      --surface:   #13141e;
+      --card:      #1a1c2a;
+      --border:    #2a2d42;
+      --accent:    #6c63ff;
+      --accent2:   #a78bfa;
+      --green:     #34d399;
+      --red:       #f87171;
+      --text:      #e8eaf6;
+      --muted:     #7b80a0;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+
+    html, body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Background glow ─────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 10%, rgba(108,99,255,.18) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(167,139,250,.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────── */
+    .page {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 48px 24px;
+      gap: 32px;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      max-width: 600px;
+    }
+
+    .hero-icon {
+      font-size: 3rem;
+      line-height: 1;
+      margin-bottom: 16px;
+      display: block;
+      filter: drop-shadow(0 0 20px rgba(108,99,255,.6));
+    }
+
+    .hero h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 50%, #6ee7b7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    /* ── Card ────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 580px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.45);
+      backdrop-filter: blur(12px);
+    }
+
+    /* ── URL input ───────────────────────────────────────────── */
+    .field-label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-wrap .icon {
+      position: absolute;
+      left: 14px;
+      color: var(--muted);
+      font-size: 1rem;
+      pointer-events: none;
+    }
+
+    #urlInput {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.92rem;
+      padding: 13px 14px 13px 40px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    #urlInput::placeholder { color: var(--muted); }
+
+    #urlInput:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(108,99,255,.18);
+    }
+
+    /* ── Divider ─────────────────────────────────────────────── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 24px 0;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Format checkboxes ───────────────────────────────────── */
+    .formats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .format-item {
+      position: relative;
+    }
+
+    .format-item input[type="checkbox"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .format-item label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 12px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color .2s, background .2s, transform .15s;
+      user-select: none;
+    }
+
+    .format-item label:hover {
+      border-color: var(--accent);
+      background: rgba(108,99,255,.07);
+      transform: translateY(-1px);
+    }
+
+    .format-item input:checked + label {
+      border-color: var(--accent);
+      background: rgba(108,99,255,.15);
+      box-shadow: 0 0 0 1px rgba(108,99,255,.3);
+    }
+
+    .format-item input:checked + label .check-dot {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .format-item input:checked + label .check-dot::after {
+      opacity: 1;
+    }
+
+    .format-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    .format-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .format-ext {
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .check-dot {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      position: relative;
+      transition: background .2s, border-color .2s;
+      flex-shrink: 0;
+    }
+
+    .check-dot::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 6px;
+      height: 6px;
+      background: #fff;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity .2s;
+    }
+
+    /* ── Generate button ─────────────────────────────────────── */
+    #generateBtn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--accent) 0%, #818cf8 100%);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .03em;
+      transition: opacity .2s, transform .15s, box-shadow .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(108,99,255,.4);
+    }
+
+    #generateBtn:hover:not(:disabled) {
+      opacity: .92;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(108,99,255,.5);
+    }
+
+    #generateBtn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    #generateBtn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    /* ── Status / feedback ───────────────────────────────────── */
+    #status {
+      margin-top: 20px;
+      border-radius: var(--radius-sm);
+      padding: 13px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      display: flex;          /* always flex — visibility toggled by [hidden] */
+      align-items: flex-start;
+      gap: 10px;
+      animation: slideIn .25s ease;
+    }
+
+    #status[hidden] { display: none !important; }
+
+    #status .status-icon {
+      font-size: 1.1rem;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    #status .status-body { flex: 1; }
+    #status .status-title {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    #status .status-msg { opacity: .9; }
+
+    #status.info {
+      background: rgba(108,99,255,.12);
+      border: 1px solid rgba(108,99,255,.3);
+      color: var(--accent2);
+    }
+
+    #status.success {
+      background: rgba(52,211,153,.1);
+      border: 1px solid rgba(52,211,153,.3);
+      color: var(--green);
+    }
+
+    #status.error {
+      background: rgba(248,113,113,.12);
+      border: 1px solid rgba(248,113,113,.4);
+      color: var(--red);
+      animation: slideIn .25s ease, shake .4s ease .1s;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%       { transform: translateX(-5px); }
+      40%       { transform: translateX(5px); }
+      60%       { transform: translateX(-4px); }
+      80%       { transform: translateX(4px); }
+    }
+
+    /* ── Spinner ─────────────────────────────────────────────── */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+      opacity: .7;
+      margin-top: 3px;
+    }
+
+    /* Button spinner stays white */
+    #generateBtn .spinner {
+      border-color: rgba(255,255,255,.4);
+      border-top-color: transparent;
+      opacity: 1;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── How-to hint ─────────────────────────────────────────── */
+    .hint {
+      max-width: 580px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+    }
+
+    .hint strong { color: var(--text); }
+
+    /* ── Example chips ───────────────────────────────────────── */
+    .examples {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+
+    .chip:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    footer {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Hero -->
+  <div class="hero">
+    <span class="hero-icon">📜</span>
+    <h1>Fandom Transcript Crawler</h1>
+    <p>Paste a Fandom wiki transcript URL and download it as your preferred document format.</p>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+
+    <!-- URL field -->
+    <label class="field-label" for="urlInput">Transcript URL</label>
+    <div class="input-wrap">
+      <span class="icon">🔗</span>
+      <input
+        id="urlInput"
+        type="url"
+        placeholder="https://phineasandferb.fandom.com/wiki/…/Transcript"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </div>
+
+    <!-- Quick-fill chips -->
+    <div class="examples">
+      <button class="chip" onclick="fillUrl('https://phineasandferb.fandom.com/wiki/Rollercoaster/Transcript')">Rollercoaster</button>
+      <button class="chip" onclick="fillUrl('https://phineasandferb.fandom.com/wiki/Lawn_Gnome_Beach_Party_of_Terror/Transcript')">Lawn Gnome</button>
+      <button class="chip" onclick="fillUrl('https://phineasandferb.fandom.com/wiki/Flop_Starz/Transcript')">Flop Starz</button>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider">Output format</div>
+
+    <!-- Format checkboxes -->
+    <div class="formats">
+      <!-- Markdown -->
+      <div class="format-item">
+        <input type="checkbox" id="fmtMd" value="md" checked/>
+        <label for="fmtMd">
+          <span class="format-icon">📝</span>
+          <span class="format-name">Markdown</span>
+          <span class="format-ext">.md</span>
+          <span class="check-dot"></span>
+        </label>
+      </div>
+
+      <!-- PDF -->
+      <div class="format-item">
+        <input type="checkbox" id="fmtPdf" value="pdf" checked/>
+        <label for="fmtPdf">
+          <span class="format-icon">📄</span>
+          <span class="format-name">PDF</span>
+          <span class="format-ext">.pdf</span>
+          <span class="check-dot"></span>
+        </label>
+      </div>
+
+      <!-- Word / Docs -->
+      <div class="format-item">
+        <input type="checkbox" id="fmtDocs" value="docs"/>
+        <label for="fmtDocs">
+          <span class="format-icon">📃</span>
+          <span class="format-name">Word</span>
+          <span class="format-ext">.docx</span>
+          <span class="check-dot"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Button -->
+    <button id="generateBtn" onclick="generate()">
+      <span id="btnIcon">✨</span>
+      <span id="btnText">Generate &amp; Download</span>
+    </button>
+
+    <!-- Status -->
+    <div id="status" hidden></div>
+  </div>
+
+  <!-- Hint -->
+  <div class="hint">
+    💡 <span>
+      Works with any <strong>*.fandom.com/wiki/*/Transcript</strong> page.
+      Results are zipped and downloaded automatically.
+    </span>
+  </div>
+
+  <footer>Built with Flask · BeautifulSoup · fpdf2 · python-docx</footer>
+</div>
+
+<script>
+  function fillUrl(url) {
+    document.getElementById('urlInput').value = url;
+  }
+
+  const STATUS_META = {
+    info:    { title: 'Working…',  emoji: '⏳' },
+    success: { title: 'Success!',  emoji: '✅' },
+    error:   { title: 'Error',     emoji: '❌' },
+  };
+
+  function setStatus(type, message) {
+    const el   = document.getElementById('status');
+    const meta = STATUS_META[type] || { title: type, emoji: 'ℹ️' };
+    // Force re-trigger CSS animation by cloning
+    const clone = el.cloneNode(false);
+    clone.className = type;
+    clone.innerHTML = `
+      <span class="status-icon">${meta.emoji}</span>
+      <span class="status-body">
+        <div class="status-title">${meta.title}</div>
+        <div class="status-msg">${message}</div>
+      </span>`;
+    el.replaceWith(clone);
+  }
+
+  function setStatusLoading(message) {
+    const el = document.getElementById('status');
+    const clone = el.cloneNode(false);
+    clone.className = 'info';
+    clone.innerHTML = `
+      <span class="spinner"></span>
+      <span class="status-body">
+        <div class="status-title">Working…</div>
+        <div class="status-msg">${message}</div>
+      </span>`;
+    el.replaceWith(clone);
+  }
+
+  function clearStatus() {
+    const el = document.getElementById('status');
+    el.className = '';
+    el.innerHTML = '';
+    el.setAttribute('hidden', '');
+  }
+
+  function showStatus() {
+    document.getElementById('status').removeAttribute('hidden');
+  }
+
+  function setLoading(loading) {
+    const btn      = document.getElementById('generateBtn');
+    const btnIcon  = document.getElementById('btnIcon');
+    const btnText  = document.getElementById('btnText');
+    btn.disabled   = loading;
+    if (loading) {
+      btnIcon.outerHTML = `<span id="btnIcon" class="spinner"></span>`;
+      btnText.textContent = 'Crawling transcript…';
+    } else {
+      document.getElementById('btnIcon').outerHTML = `<span id="btnIcon">✨</span>`;
+      btnText.textContent = 'Generate & Download';
+    }
+  }
+
+  async function generate() {
+    clearStatus();
+    const url = document.getElementById('urlInput').value.trim();
+    const formats = ['md','pdf','docs'].filter(f =>
+      document.getElementById(`fmt${f.charAt(0).toUpperCase()+f.slice(1)}`).checked
+    );
+
+    if (!url) {
+      setStatus('error', 'Please enter a Fandom transcript URL first.');
+      showStatus();
+      return;
+    }
+    if (formats.length === 0) {
+      setStatus('error', 'Please select at least one output format (Markdown, PDF, or Word).');
+      showStatus();
+      return;
+    }
+
+    setLoading(true);
+    setStatusLoading('Fetching and parsing transcript — this may take a few seconds…');
+    showStatus();
+
+    try {
+      const resp = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, formats }),
+      });
+
+      if (!resp.ok) {
+        let msg = 'Something went wrong on the server.';
+        try {
+          const json = await resp.json();
+          if (json.error) msg = json.error;
+        } catch {}
+        setStatus('error', msg);
+        showStatus();
+        return;
+      }
+
+      // Trigger download
+      const blob     = await resp.blob();
+      const dlUrl    = URL.createObjectURL(blob);
+      const a        = document.createElement('a');
+      const filename = resp.headers.get('Content-Disposition')
+        ?.match(/filename="?([^"]+)"?/)?.[1] ?? 'transcript.zip';
+      a.href     = dlUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(dlUrl);
+
+      setStatus('success',
+        `Downloaded <strong>${filename}</strong> containing: ${formats.map(f => '<code>.' + (f === 'docs' ? 'docx' : f) + '</code>').join(', ')}.`);
+      showStatus();
+
+    } catch (err) {
+      setStatus('error', `Network error — could not reach the server. (${err.message})`);
+      showStatus();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Allow Enter key on URL input
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') generate();
+  });
+</script>
+</body>
+</html>
