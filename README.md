@@ -1,10 +1,20 @@
 # 📜 Fandom Transcript Crawler
 
-A web app that crawls any **Fandom wiki `/Transcript` page** and lets you download it as **Markdown**, **PDF**, or **Word (.docx)** — instantly.
+A web app that crawls any **Fandom wiki `/Transcript` page** and lets you download it as **Markdown**, **PDF**, or **Word (.docx)** — instantly, in your browser.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![Flask](https://img.shields.io/badge/Flask-3.0-black?logo=flask)
+![Render](https://img.shields.io/badge/Deployed_on-Render-46E3B7?logo=render)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## 🌐 Live Demo
+
+**[https://transcript-from-fandomwiki.onrender.com](https://transcript-from-fandomwiki.onrender.com)**
+
+> ⚠️ Hosted on Render's free plan — the server sleeps after 15 min of inactivity.
+> The **first visit after a period of inactivity may take ~30–60 seconds** to wake up. Subsequent requests are instant.
 
 ---
 
@@ -12,72 +22,77 @@ A web app that crawls any **Fandom wiki `/Transcript` page** and lets you downlo
 
 - 🔗 Paste any `*.fandom.com/wiki/*/Transcript` URL
 - 📝 Export as **Markdown** (`.md`)
-- 📄 Export as **PDF** (styled, with character names in blue)
+- 📄 Export as **PDF** (styled, character names highlighted in blue)
 - 📃 Export as **Word** (`.docx`)
-- ⚡ Multiple formats packed into a single `.zip` download
-- 🌐 Works across all Fandom wikis (Phineas and Ferb, Harry Potter, etc.)
+- 📦 All selected formats packed into a single `.zip` download
+- ⚡ Runs entirely in-browser — no login, no database, no setup
+- 🌐 Works across all Fandom wikis (Phineas and Ferb, Harry Potter, SpongeBob, etc.)
 
 ---
 
-## 🖥️ Demo
+## 🖼️ How to Use
 
-> Paste a URL → select formats → click Generate → ZIP downloads automatically.
+1. Open the [live app](https://transcript-from-fandomwiki.onrender.com)
+2. Paste a Fandom transcript URL (e.g. `https://phineasandferb.fandom.com/wiki/Rollercoaster/Transcript`)
+3. Check the formats you want — **Markdown**, **PDF**, **Word**
+4. Click **Generate & Download**
+5. A `.zip` file downloads automatically with your chosen files inside
 
 ---
 
-## 🚀 Deploy to Render (Free)
+## ⚙️ How It Works
 
-### 1. Push to GitHub
-
-```bash
-git remote add origin https://github.com/<your-username>/transcript-from-fandom.git
-git push -u origin master
+```
+User pastes URL
+      ↓
+Flask backend calls MediaWiki Action API (?action=parse)
+      ↓
+HTML parsed with BeautifulSoup
+  • <b>Character:</b> → dialogue line
+  • <i>(text)</i>    → stage direction
+  • Lines with ♪     → song
+      ↓
+Rendered to selected format(s) — all in memory, no disk writes
+      ↓
+Packed into a .zip → downloaded to browser
 ```
 
-### 2. Deploy on Render
-
-1. Go to [render.com](https://render.com) and sign up (free)
-2. Click **New → Web Service**
-3. Connect your GitHub repo
-4. Render auto-detects `render.yaml` — just click **Deploy**
-
-That's it. No environment variables needed.
-
-> ⚠️ **Free tier note:** The service sleeps after 15 minutes of inactivity. The first request after sleep takes ~30 seconds to wake up.
+**Why use the MediaWiki API instead of scraping directly?**
+Fandom blocks plain `requests` with a 403. The public MediaWiki API (`/api.php`) is accessible without authentication and returns clean, structured HTML.
 
 ---
 
 ## 🛠️ Run Locally
 
-### Prerequisites
+### Requirements
 
 - Python 3.11+
 
 ### Setup
 
 ```bash
-git clone https://github.com/<your-username>/transcript-from-fandom.git
-cd transcript-from-fandom
+git clone https://github.com/hisunhelloo/transcript-from-fandomwiki.git
+cd transcript-from-fandomwiki
 
 pip install -r requirements.txt
 python app.py
 ```
 
-Open [http://localhost:5000](http://localhost:5000) in your browser.
+Open [http://localhost:5000](http://localhost:5000)
 
-### CLI usage (no web server needed)
+### CLI (no web server needed)
 
 ```bash
-# Default: crawl Rollercoaster transcript → output/ as both md + pdf
+# Default: Rollercoaster transcript → ./output/ as .md + .pdf
 python crawl_transcript.py
 
 # Custom URL
 python crawl_transcript.py https://phineasandferb.fandom.com/wiki/Lawn_Gnome_Beach_Party_of_Terror/Transcript
 
-# Markdown only, custom output directory
+# Markdown only, custom output dir
 python crawl_transcript.py <URL> --format md --out ./transcripts
 
-# Options
+# All options
 python crawl_transcript.py --help
 ```
 
@@ -86,43 +101,49 @@ python crawl_transcript.py --help
 ## 📁 Project Structure
 
 ```
-transcript-from-fandom/
-├── app.py                  # Flask web server + crawler logic
+transcript-from-fandomwiki/
+├── app.py                  # Flask server + all crawler/export logic
 ├── crawl_transcript.py     # Standalone CLI version
 ├── templates/
-│   └── index.html          # Web UI (dark mode, vanilla CSS)
-├── _fonts/                 # Bundled DejaVu Sans fonts (for PDF)
+│   └── index.html          # Web UI (dark mode, vanilla HTML/CSS/JS)
+├── _fonts/                 # Bundled DejaVu Sans TTF fonts (for PDF Unicode support)
+│   ├── DejaVuSans.ttf
+│   ├── DejaVuSans-Bold.ttf
+│   └── DejaVuSans-Oblique.ttf
 ├── requirements.txt
-├── render.yaml             # Render deployment config
+├── render.yaml             # Render one-click deploy config
 └── .gitignore
 ```
 
 ---
 
-## ⚙️ How It Works
+## 🧰 Tech Stack
 
-1. **Fetch** — Uses the [MediaWiki Action API](https://www.mediawiki.org/wiki/API:Main_page) (`?action=parse`) to fetch the page HTML without hitting bot-blockers
-2. **Parse** — Splits each `<p>` block on `<br>` boundaries and classifies lines as:
-   - `<b>Character:</b>` → dialogue
-   - `<i>(text)</i>` → stage direction
-   - Lines starting with ♪ → song
-3. **Export** — Renders to the selected format(s) and zips them for download
+| Layer | Tool |
+|---|---|
+| Web framework | Flask + Gunicorn |
+| HTML fetching | `requests` + MediaWiki Action API |
+| HTML parsing | BeautifulSoup4 + lxml |
+| PDF export | fpdf2 + DejaVu Sans (Unicode-safe font) |
+| Word export | python-docx |
+| Hosting | Render (free tier) |
 
 ---
 
-## 🧰 Tech Stack
+## 🚀 Deploy Your Own (Render — Free)
 
-| Layer | Library |
-|---|---|
-| Web server | Flask + Gunicorn |
-| Scraping | requests + BeautifulSoup4 (lxml) |
-| PDF generation | fpdf2 + DejaVu Sans (Unicode font) |
-| Word generation | python-docx |
+1. Fork this repo
+2. Go to [render.com](https://render.com) → **New → Web Service**
+3. Connect your forked repo
+4. `render.yaml` is auto-detected — just click **Deploy**
+
+No environment variables required.
 
 ---
 
 ## 📝 License
 
-MIT — do whatever you want with it.
+MIT — free to use, modify, and distribute.
 
-> Content scraped from Fandom wikis is user-contributed and licensed under [CC-BY-SA](https://www.fandom.com/licensing). This tool is for personal/educational use.
+> Transcript content on Fandom is user-contributed and licensed under [CC-BY-SA](https://www.fandom.com/licensing).
+> This tool is intended for personal and educational use.
